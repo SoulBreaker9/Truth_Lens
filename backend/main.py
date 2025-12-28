@@ -5,6 +5,7 @@ import time
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai
+from dotenv import load_dotenv
 
 # --- CONFIGURATION (AI STUDIO) ---
 PORT = 8000
