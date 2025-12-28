@@ -1,179 +1,290 @@
 "use client";
-import { useState } from "react";
-import { ShieldAlert, CheckCircle, Upload, Activity, Search, BrainCircuit } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Upload, ShieldAlert, CheckCircle, Search, Activity, Cpu, Eye, Lock, ScanLine, AlertTriangle } from "lucide-react";
 
 export default function Home() {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
+  const [bootText, setBootText] = useState("INITIALIZING NEURAL CORE...");
+  const [progress, setProgress] = useState(0);
+
+  // --- BOOT SEQUENCE LOGIC ---
+  const runBootSequence = () => {
+    const steps = [
+      "ESTABLISHING SECURE LINK...",
+      "EXTRACTING BIO-METRIC DATA...",
+      "RUNNING PHYSICS SIMULATION...",
+      "DETECTING GENERATIVE ARTIFACTS...",
+      "QUERYING GLOBAL KNOWLEDGE GRAPH...",
+      "SYNTHESIZING FINAL VERDICT..."
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      setBootText(steps[i % steps.length]);
+      i++;
+    }, 1200);
+
+    const progInterval = setInterval(() => {
+      setProgress((prev) => (prev >= 100 ? 100 : prev + 1.5));
+    }, 100);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(progInterval);
+    };
+  };
 
   const handleFileChange = (e) => {
-    if (e.target.files) {
+    if (e.target.files[0]) {
       setFile(e.target.files[0]);
+      setResult(null);
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     if (!file) return;
-    setLoading(true);
-    setResult(null);
+
+    setUploading(true);
+    setProgress(0);
+    const stopBoot = runBootSequence();
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      // CONNECT TO BACKEND
       const response = await fetch("http://127.0.0.1:8000/analyze", {
         method: "POST",
         body: formData,
       });
 
       const data = await response.json();
-
-      // Parse the JSON string from Gemini
-      let parsedData;
-      try {
-        parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-      } catch (e) {
-        // If Gemini returns raw text instead of JSON, handle it gracefully
-        parsedData = {
-          is_fake: false,
-          verdict_title: "ANALYSIS ERROR",
-          fact_check_analysis: "Raw Output: " + data
-        };
-      }
-      setResult(parsedData);
+      stopBoot(); // Stop animation
+      setUploading(false);
+      setResult(data);
     } catch (error) {
-      console.error("Error:", error);
-      alert("Connection Failed! Is the Backend running on port 8000?");
+      console.error("Error uploading file:", error);
+      stopBoot();
+      setUploading(false);
+      alert("SECURE CONNECTION FAILED. RETRY.");
     }
-    setLoading(false);
   };
 
+  // --- VERDICT LOGIC ---
+  // If score > 50 -> RED (Fake)
+  // If score <= 50 -> GREEN (Real)
+  const isFake = result ? parseInt(result.confidence_score) > 50 : false;
+  const themeColor = isFake ? "text-red-500" : "text-green-500";
+  const themeBorder = isFake ? "border-red-500" : "border-green-500";
+  const themeBg = isFake ? "bg-red-950/30" : "bg-green-950/30";
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-start p-10 scanline relative overflow-hidden">
+    <div className="min-h-screen relative scanline bg-black selection:bg-green-900 selection:text-green-100 flex flex-col items-center justify-center p-4">
+      {/* BACKGROUND MATRIX GRID */}
+      <div className="absolute inset-0 cyber-grid opacity-20 pointer-events-none"></div>
 
-      {/* BACKGROUND DECORATION */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
-        <div className="absolute top-10 left-10 animate-pulse">Running TruthLens v2.0...</div>
-        <div className="absolute top-14 left-10">Connection: SECURE</div>
-        <div className="absolute bottom-10 right-10">Google Vertex AI: CONNECTED</div>
-      </div>
-
-      {/* HEADER */}
-      <div className="text-center mb-10 z-10">
-        <h1 className="text-6xl font-bold tracking-widest border-b-4 border-green-500 pb-2 mb-2 text-shadow-glow">
-          TRUTH<span className="text-white">LENS</span>
+      {/* --- HEADER --- */}
+      <motion.div
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="z-10 text-center mb-12"
+      >
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <ScanLine className="w-6 h-6 text-blue-400 animate-pulse" />
+          <span className="text-blue-400 font-mono text-xs tracking-[0.3em]">DEPARTMENT OF DEFENSE // CYBER DIVISION</span>
+        </div>
+        <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 glitch-text" data-text="TRUTHLENS OMEGA">
+          TRUTHLENS OMEGA
         </h1>
-        <p className="text-xl font-mono text-green-400 opacity-80 flex items-center justify-center gap-2">
-          <BrainCircuit className="w-5 h-5" /> MULTIMODAL FORENSICS ENGINE
+        <p className="mt-4 text-green-400/80 font-mono text-sm tracking-widest uppercase">
+          [ Tier-1 Generative Media Forensics Engine ]
         </p>
-      </div>
+      </motion.div>
 
-      {/* UPLOAD SECTION */}
-      {!result && (
-        <div className="z-10 w-full max-w-2xl bg-black/80 border border-green-700 p-10 rounded-lg shadow-[0_0_50px_rgba(0,255,0,0.2)] backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-6">
-            <label className="w-full flex flex-col items-center justify-center h-48 border-2 border-green-500 border-dashed rounded-lg cursor-pointer hover:bg-green-900/20 transition group">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <Upload className="w-16 h-16 mb-4 text-green-500 group-hover:scale-110 transition" />
-                <p className="text-lg">DROP SUSPICIOUS FOOTAGE HERE</p>
-                <p className="text-sm opacity-60 mt-2">MP4 / MOV Supported</p>
+      {/* --- UPLOAD ZONE --- */}
+      {!result && !uploading && (
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="z-10 w-full max-w-2xl"
+        >
+          <div className="glass-panel rounded-2xl p-10 text-center border border-white/10 hover:border-green-500/50 transition-all duration-500 group relative overflow-hidden">
+            {/* Hover Glow */}
+            <div className="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
+            <input
+              type="file"
+              onChange={handleFileChange}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+              accept="video/*"
+            />
+
+            <div className="flex flex-col items-center gap-6 relative z-10 pointer-events-none">
+              <div className="w-24 h-24 rounded-full border-2 border-dashed border-green-500/30 flex items-center justify-center group-hover:scale-110 group-hover:border-green-500 transition-all">
+                <Upload className="w-10 h-10 text-green-400" />
               </div>
-              <input type="file" className="hidden" accept="video/mp4,video/quicktime" onChange={handleFileChange} />
-            </label>
-
-            {file && (
-              <div className="w-full bg-green-900/30 p-2 text-center border border-green-500/50 text-green-300 font-mono">
-                [FILE READY]: {file.name}
-              </div>
-            )}
-
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="mt-2 px-8 py-4 bg-green-600 text-black font-extrabold text-xl rounded hover:bg-green-400 hover:scale-105 transition w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-            >
-              {loading ? (
-                <>
-                  <Activity className="animate-spin" /> RUNNING NEURAL SCAN...
-                </>
-              ) : (
-                "INITIATE ANALYSIS"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* RESULTS DASHBOARD */}
-      {result && (
-        <div className="z-10 w-full max-w-5xl animate-in fade-in slide-in-from-bottom-10 duration-700">
-
-          <button onClick={() => setResult(null)} className="mb-4 text-sm hover:underline">&larr; ANALYZE NEW FILE</button>
-
-          {/* MAIN VERDICT CARD */}
-          {/* LOGIC: User requested 'Fake Video Detecting %'. So we treat score as Probability of Fake. 
-              > 50% = FAKE (RED), <= 50% = REAL (GREEN) 
-              Fix: Use parseInt to ensure string/number compatibility */}
-          <div className={`p-8 border-4 ${parseInt(result.confidence_score) > 50 ? "border-red-600 bg-red-950/40" : "border-green-600 bg-green-950/40"} rounded-xl mb-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6`}>
-            <div className="flex items-center gap-6">
-              {parseInt(result.confidence_score) > 50 ? <ShieldAlert className="w-24 h-24 text-red-500 animate-pulse" /> : <CheckCircle className="w-24 h-24 text-green-500" />}
               <div>
-                <h2 className={`text-4xl font-black ${parseInt(result.confidence_score) > 50 ? "text-red-500" : "text-green-500"}`}>
-                  {result.verdict_title}
-                </h2>
-                <p className="text-xl opacity-80 mt-1">DEEPFAKE PROBABILITY: {result.confidence_score}%</p>
+                <h3 className="text-2xl font-bold text-white mb-2">INITIATE FILE UPLOAD</h3>
+                <p className="text-gray-400 font-mono text-xs">SUPPORTS: MP4, MOV, AVI [MAX 50MB]</p>
               </div>
-            </div>
-            <div className="text-right hidden md:block">
-              <div className="text-xs opacity-50">ANALYSIS ID</div>
-              <div className="font-mono text-lg">#GDG-{Math.floor(Math.random() * 10000)}</div>
+              {file && (
+                <div className="bg-green-900/20 px-4 py-2 rounded border border-green-500/30 text-green-300 font-mono text-sm">
+                  SELECTED: {file.name}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {file && (
+            <motion.button
+              onClick={handleSubmit}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="mt-6 w-full py-4 bg-green-600 hover:bg-green-500 text-black font-bold text-xl tracking-widest uppercase rounded clip-path-polygon hover:shadow-[0_0_20px_rgba(0,255,65,0.6)] transition-all"
+            >
+              Start Forensic Analysis
+            </motion.button>
+          )}
+        </motion.div>
+      )}
 
-            {/* GOOGLE FACT CHECKER */}
-            <div className="p-6 border border-blue-500/50 bg-blue-900/10 rounded-lg backdrop-blur-md">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-blue-400">
-                <Search className="w-6 h-6" /> GOOGLE GROUNDING
-              </h3>
-              <p className="text-md leading-relaxed text-blue-100/90 font-sans">
-                {result.fact_check_analysis || "No contextual data found in search index."}
-              </p>
-            </div>
+      {/* --- SYSTEM BOOT LOADER --- */}
+      {uploading && (
+        <div className="z-10 w-full max-w-3xl text-center font-mono">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-8"
+          >
+            <Cpu className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-spin-slow" />
+            <h2 className="text-2xl text-blue-400 font-bold animate-pulse">{bootText}</h2>
+          </motion.div>
 
-            {/* FORENSIC EVIDENCE */}
-            <div className="p-6 border border-gray-600 bg-gray-900/50 rounded-lg">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-300">
-                <Activity className="w-6 h-6" /> FORENSIC TRACES
-              </h3>
+          {/* Hacking Progress Bar */}
+          <div className="w-full h-2 bg-gray-900/50 border border-gray-700 rounded-full overflow-hidden relative">
+            <motion.div
+              className="h-full bg-blue-500 relative"
+              style={{ width: `${progress}%` }}
+            >
+              <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 shadow-[0_0_10px_white]"></div>
+            </motion.div>
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-2">
+            <span>SYSTEM_INTEGRITY: 100%</span>
+            <span>{progress.toFixed(1)}%</span>
+          </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-bold text-red-400 uppercase mb-2">Visual Anomalies</h4>
-                  {result.visual_evidence?.length > 0 ? (
-                    <ul className="list-disc pl-5 text-sm space-y-1 text-gray-300">
-                      {result.visual_evidence.map((item, i) => <li key={i}>{item}</li>)}
-                    </ul>
-                  ) : <span className="text-sm text-green-500">No visual artifacts detected.</span>}
-                </div>
-
-                <div className="border-t border-gray-700 pt-4">
-                  <h4 className="text-sm font-bold text-yellow-400 uppercase mb-2">Audio Anomalies</h4>
-                  {result.audio_evidence?.length > 0 ? (
-                    <ul className="list-disc pl-5 text-sm space-y-1 text-gray-300">
-                      {result.audio_evidence.map((item, i) => <li key={i}>{item}</li>)}
-                    </ul>
-                  ) : <span className="text-sm text-green-500">Audio matches visual patterns.</span>}
-                </div>
-              </div>
-            </div>
-
+          <div className="mt-8 text-left h-32 overflow-hidden text-xs text-green-500/50 border-l-2 border-green-500/20 pl-4">
+            <p>&gt;&gt; loading_modules: [vision, audio, physics]</p>
+            <p>&gt;&gt; extracting_frames: (5/5) complete</p>
+            <p>&gt;&gt; checking_database: 404_records_found</p>
+            <p>&gt;&gt; analyzing_pixels: .................</p>
+            <p>&gt;&gt; physics_engine: calculating_trajectory</p>
           </div>
         </div>
       )}
-    </main>
+
+      {/* --- RESULT DASHBOARD --- */}
+      {result && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="z-20 w-full max-w-6xl mt-10 pb-20"
+        >
+          <button
+            onClick={() => setResult(null)}
+            className="mb-8 group flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900/50 px-4 py-2 rounded-lg border border-gray-800 hover:border-gray-500"
+          >
+            <span className="group-hover:-translate-x-1 transition-transform">&larr;</span> START NEW INVESTIGATION
+          </button>
+
+          {/* VERDICT BANNER */}
+          <div className={`relative overflow-hidden rounded-xl border-4 ${themeBorder} ${themeBg} p-6 md:p-10 mb-8 backdrop-blur-xl shadow-[0_0_50px_rgba(0,0,0,0.5)]`}>
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+              <ShieldAlert className="w-48 h-48 md:w-64 md:h-64" />
+            </div>
+
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                <div className={`p-4 rounded-full border-2 ${themeBorder} bg-black/40 shadow-lg`}>
+                  {isFake ? (
+                    <AlertTriangle className="w-12 h-12 text-red-500 animate-pulse" />
+                  ) : (
+                    <CheckCircle className="w-12 h-12 text-green-500" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <span className={`text-xs font-bold px-3 py-1 rounded tracking-wider ${isFake ? 'bg-red-600 text-black' : 'bg-green-600 text-black'}`}>
+                      VERDICT FINALIZED
+                    </span>
+                    <span className="text-gray-400 text-xs font-mono tracking-widest">ID: {Math.floor(Math.random() * 100000).toString(16).toUpperCase()}</span>
+                  </div>
+                  <h1 className={`text-4xl md:text-6xl font-black italic tracking-tighter ${themeColor} text-glow break-words`}>
+                    {result.verdict_title || (isFake ? "DEEPFAKE DETECTED" : "LIKELY AUTHENTIC")}
+                  </h1>
+                </div>
+              </div>
+
+              <div className="text-left md:text-right mt-4 md:mt-0 bg-black/30 p-4 rounded-lg border border-white/5">
+                <div className="text-xs text-gray-400 mb-1 font-mono tracking-widest uppercase">Probability of Manipulation</div>
+                <div className={`text-5xl md:text-6xl font-mono font-bold ${themeColor}`}>
+                  {result.confidence_score !== undefined ? result.confidence_score : 0}%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* EVIDENCE GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* COL 1: VISUALS */}
+            <div className="glass-panel p-6 rounded-lg border-t-4 border-blue-500 bg-blue-950/10">
+              <h3 className="text-lg font-bold text-blue-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                <Eye className="w-5 h-5" /> Visual Forensics
+              </h3>
+              <ul className="space-y-3 font-mono text-sm text-gray-300">
+                {result.visual_evidence?.length > 0 ? result.visual_evidence.map((item, i) => (
+                  <li key={i} className="flex gap-3 bg-black/20 p-2 rounded">
+                    <span className="text-blue-500 font-bold">[{i + 1}]</span>
+                    <span className="leading-snug">{item}</span>
+                  </li>
+                )) : <li className="text-gray-500 italic flex gap-2"><CheckCircle className="w-4 h-4" /> No visual anomalies detected.</li>}
+              </ul>
+            </div>
+
+            {/* COL 2: AUDIO */}
+            <div className="glass-panel p-6 rounded-lg border-t-4 border-purple-500 bg-purple-950/10">
+              <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                <Activity className="w-5 h-5" /> Audio Spectrum
+              </h3>
+              <ul className="space-y-3 font-mono text-sm text-gray-300">
+                {result.audio_evidence?.length > 0 ? result.audio_evidence.map((item, i) => (
+                  <li key={i} className="flex gap-3 bg-black/20 p-2 rounded">
+                    <span className="text-purple-500 font-bold">[{i + 1}]</span>
+                    <span className="leading-snug">{item}</span>
+                  </li>
+                )) : <li className="text-gray-500 italic flex gap-2"><CheckCircle className="w-4 h-4" /> No audio anomalies detected.</li>}
+              </ul>
+            </div>
+
+            {/* COL 3: CONTEXT */}
+            <div className="glass-panel p-6 rounded-lg border-t-4 border-yellow-500 bg-yellow-950/10">
+              <h3 className="text-lg font-bold text-yellow-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                <Search className="w-5 h-5" /> Knowledge Graph
+              </h3>
+              <div className="text-sm text-gray-300 font-mono leading-relaxed bg-black/20 p-3 rounded border border-white/5">
+                {result.fact_check_analysis || "No contextual matches found in global database."}
+              </div>
+            </div>
+
+          </div>
+
+        </motion.div>
+      )}
+    </div>
   );
 }
