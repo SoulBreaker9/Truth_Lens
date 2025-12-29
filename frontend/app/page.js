@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, ShieldAlert, CheckCircle, Search, Activity, Cpu, Eye, Lock, ScanLine, AlertTriangle } from "lucide-react";
+import { Upload, ShieldAlert, CheckCircle, Search, Activity, Cpu, Eye, Lock, ScanLine, AlertTriangle, Cloud } from "lucide-react";
 
 export default function Home() {
   const [file, setFile] = useState(null);
@@ -9,6 +9,7 @@ export default function Home() {
   const [result, setResult] = useState(null);
   const [bootText, setBootText] = useState("INITIALIZING NEURAL CORE...");
   const [progress, setProgress] = useState(0);
+  const [mode, setMode] = useState('cloud'); // 'cloud' or 'local'
 
   // --- BOOT SEQUENCE LOGIC ---
   const runBootSequence = () => {
@@ -53,9 +54,10 @@ export default function Home() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("mode", mode);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/analyze", {
+      const response = await fetch("http://localhost:8000/analyze", {
         method: "POST",
         body: formData,
       });
@@ -111,6 +113,36 @@ export default function Home() {
           animate={{ scale: 1, opacity: 1 }}
           className="z-10 w-full max-w-2xl"
         >
+          {/* ENGINE SWITCH - REDESIGNED */}
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <button
+              onClick={() => setMode('cloud')}
+              className={`relative overflow-hidden group p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${mode === 'cloud'
+                ? 'bg-green-950/40 border-green-500 shadow-[0_0_20px_rgba(0,255,65,0.2)]'
+                : 'bg-black/40 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+            >
+              <Cloud className={`w-8 h-8 ${mode === 'cloud' ? 'text-green-400' : 'text-gray-500'}`} />
+              <div className="text-center">
+                <div className={`font-black font-mono tracking-widest text-lg ${mode === 'cloud' ? 'text-green-400' : 'text-gray-400'}`}>CLOUD ENGINE</div>
+                <div className="text-xs font-mono text-gray-500 mt-1">GEMINI 2.0 FLASH // MULTIMODAL</div>
+              </div>
+              {mode === 'cloud' && <div className="absolute inset-0 bg-green-500/5 pointer-events-none animate-pulse"></div>}
+            </button>
+
+            <button
+              onClick={() => setMode('local')}
+              className={`relative overflow-hidden group p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${mode === 'local'
+                ? 'bg-purple-950/40 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.2)]'
+                : 'bg-black/40 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+            >
+              <Cpu className={`w-8 h-8 ${mode === 'local' ? 'text-purple-400' : 'text-gray-500'}`} />
+              <div className="text-center">
+                <div className={`font-black font-mono tracking-widest text-lg ${mode === 'local' ? 'text-purple-400' : 'text-gray-400'}`}>NEURAL CORE</div>
+                <div className="text-xs font-mono text-gray-500 mt-1">LOCAL INFERENCE // PIXEL-SCAN</div>
+              </div>
+              {mode === 'local' && <div className="absolute inset-0 bg-purple-500/5 pointer-events-none animate-pulse"></div>}
+            </button>
+          </div>
           <div className="glass-panel rounded-2xl p-10 text-center border border-white/10 hover:border-green-500/50 transition-all duration-500 group relative overflow-hidden">
             {/* Hover Glow */}
             <div className="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
@@ -145,7 +177,7 @@ export default function Home() {
               whileTap={{ scale: 0.98 }}
               className="mt-6 w-full py-4 bg-green-600 hover:bg-green-500 text-black font-bold text-xl tracking-widest uppercase rounded clip-path-polygon hover:shadow-[0_0_20px_rgba(0,255,65,0.6)] transition-all"
             >
-              Start Forensic Analysis
+              {mode === 'local' ? 'EXECUTE NEURAL SCAN' : 'START FORENSIC ANALYSIS'}
             </motion.button>
           )}
         </motion.div>
@@ -257,29 +289,33 @@ export default function Home() {
             </div>
 
             {/* COL 2: AUDIO */}
-            <div className="glass-panel p-6 rounded-lg border-t-4 border-purple-500 bg-purple-950/10">
-              <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
-                <Activity className="w-5 h-5" /> Audio Spectrum
-              </h3>
-              <ul className="space-y-3 font-mono text-sm text-gray-300">
-                {result.audio_evidence?.length > 0 ? result.audio_evidence.map((item, i) => (
-                  <li key={i} className="flex gap-3 bg-black/20 p-2 rounded">
-                    <span className="text-purple-500 font-bold">[{i + 1}]</span>
-                    <span className="leading-snug">{item}</span>
-                  </li>
-                )) : <li className="text-gray-500 italic flex gap-2"><CheckCircle className="w-4 h-4" /> No audio anomalies detected.</li>}
-              </ul>
-            </div>
+            {mode === 'cloud' && (
+              <div className="glass-panel p-6 rounded-lg border-t-4 border-purple-500 bg-purple-950/10">
+                <h3 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                  <Activity className="w-5 h-5" /> Audio Spectrum
+                </h3>
+                <ul className="space-y-3 font-mono text-sm text-gray-300">
+                  {result.audio_evidence?.length > 0 ? result.audio_evidence.map((item, i) => (
+                    <li key={i} className="flex gap-3 bg-black/20 p-2 rounded">
+                      <span className="text-purple-500 font-bold">[{i + 1}]</span>
+                      <span className="leading-snug">{item}</span>
+                    </li>
+                  )) : <li className="text-gray-500 italic flex gap-2"><CheckCircle className="w-4 h-4" /> No audio anomalies detected.</li>}
+                </ul>
+              </div>
+            )}
 
             {/* COL 3: CONTEXT */}
-            <div className="glass-panel p-6 rounded-lg border-t-4 border-yellow-500 bg-yellow-950/10">
-              <h3 className="text-lg font-bold text-yellow-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
-                <Search className="w-5 h-5" /> Knowledge Graph
-              </h3>
-              <div className="text-sm text-gray-300 font-mono leading-relaxed bg-black/20 p-3 rounded border border-white/5">
-                {result.fact_check_analysis || "No contextual matches found in global database."}
+            {mode === 'cloud' && (
+              <div className="glass-panel p-6 rounded-lg border-t-4 border-yellow-500 bg-yellow-950/10">
+                <h3 className="text-lg font-bold text-yellow-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+                  <Search className="w-5 h-5" /> Knowledge Graph
+                </h3>
+                <div className="text-sm text-gray-300 font-mono leading-relaxed bg-black/20 p-3 rounded border border-white/5">
+                  {result.fact_check_analysis || "No contextual matches found in global database."}
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
 

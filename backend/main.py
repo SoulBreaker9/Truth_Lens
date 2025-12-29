@@ -2,7 +2,7 @@ import os
 import shutil
 import json
 import time
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -25,8 +25,8 @@ print(f"Configuring Gemini API...")
 genai.configure(api_key=API_KEY)
 
 # --- MODEL SETUP ---
-# Switching to PRO model for maximum reasoning capability
-model_name = "gemini-2.5-pro"
+# Switching to Flash model for responsiveness (User Request: "Functionable like before")
+model_name = "gemini-2.0-flash"
 print(f"Loading SOTA Model: {model_name}...")
 
 # Grounding via Google Search
@@ -101,31 +101,56 @@ def extract_hd_frames(video_path, output_folder, count=5):
     print(f"Extracted {len(extracted_paths)} frames.")
     return extracted_paths
 
+# Implement Dual Engine
+from local_engine import LocalDeepfakeDetector
+
+# Initialize Engines
+local_detector = LocalDeepfakeDetector() # Loaded on startup
+
 @app.post("/analyze")
-async def analyze_video(file: UploadFile = File(...)):
+async def analyze_video(
+    file: UploadFile = File(...),
+    mode: str = Form("cloud") # Default to cloud if not specified
+):
     temp_filename = f"temp_{file.filename}"
     frame_folder = f"frames_{int(time.time())}"
-    extracted_frames = []
     
     try:
-        print(f"Receiving video: {file.filename}")
+        print(f"[INFO] Receiving video: {file.filename} (Mode: {mode})")
         
         # Save upload to disk
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
+        # --- BRANCH 1: LOCAL ENGINE ---
+        if mode == "local":
+            print("[INFO] routing to LOCAL NEURAL ENGINE...")
+            result = local_detector.detect(temp_filename)
+            
+            # Formulate response format matching the cloud one
+            return {
+                "confidence_score": result.get("confidence", 0),
+                "verdict_title": result.get("verdict", "ERROR"),
+                "visual_evidence": result.get("evidence", []),
+                "audio_evidence": ["N/A (Local Mode)"],
+                "fact_check_analysis": "Local Analysis Only. No external context."
+            }
+
+        # --- BRANCH 2: CLOUD ENGINE (Gemini) ---
+        # ... Existing Gemini Logic ...
         
         # --- HYBRID FORENSICS: EXTRACT FRAMES ---
         extracted_frames = extract_hd_frames(temp_filename, frame_folder, count=5)
             
-        print(f"Uploading Video to Gemini...")
+        print(f"[INFO] Uploading Video to Gemini...")
         video_file = genai.upload_file(path=temp_filename, display_name=file.filename)
         
         # Upload Frames to Gemini
         uploaded_images = []
-        print(f"Uploading {len(extracted_frames)} Frames to Gemini...")
+        print(f"[INFO] Uploading {len(extracted_frames)} Frames to Gemini...")
         for frame_path in extracted_frames:
-             img_file = genai.upload_file(path=frame_path, display_name=os.path.basename(frame_path))
-             uploaded_images.append(img_file)
+                img_file = genai.upload_file(path=frame_path, display_name=os.path.basename(frame_path))
+                uploaded_images.append(img_file)
 
         # Wait for VIDEO processing (Images are instant usually)
         print(f"Waiting for video processing...")
