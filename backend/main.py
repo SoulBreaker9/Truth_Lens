@@ -25,8 +25,8 @@ print(f"Configuring Gemini API...")
 genai.configure(api_key=API_KEY)
 
 # --- MODEL SETUP ---
-# Switching to Flash model for responsiveness (User Request: "Functionable like before")
-model_name = "gemini-2.0-flash"
+# Switching to Best Available Pro model (Dynamically Verified)
+model_name = "gemini-2.5-pro"
 print(f"Loading SOTA Model: {model_name}...")
 
 # Grounding via Google Search

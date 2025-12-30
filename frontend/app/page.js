@@ -124,7 +124,7 @@ export default function Home() {
               <Cloud className={`w-8 h-8 ${mode === 'cloud' ? 'text-green-400' : 'text-gray-500'}`} />
               <div className="text-center">
                 <div className={`font-black font-mono tracking-widest text-lg ${mode === 'cloud' ? 'text-green-400' : 'text-gray-400'}`}>CLOUD ENGINE</div>
-                <div className="text-xs font-mono text-gray-500 mt-1">GEMINI 2.0 FLASH // MULTIMODAL</div>
+                <div className="text-xs font-mono text-gray-500 mt-1">GEMINI 2.5 PRO // MULTIMODAL</div>
               </div>
               {mode === 'cloud' && <div className="absolute inset-0 bg-green-500/5 pointer-events-none animate-pulse"></div>}
             </button>
