@@ -3,6 +3,7 @@ import shutil
 import json
 import time
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -58,6 +59,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/generated", StaticFiles(directory="generated"), name="generated")
+
 @app.get("/")
 def home():
     return {"status": "TruthLens Backend is Running (SOTA Mode)", "model": model_name}
@@ -107,6 +110,9 @@ from local_engine import LocalDeepfakeDetector
 # Initialize Engines
 local_detector = LocalDeepfakeDetector() # Loaded on startup
 
+from gradcam_engine.engine import GradCAMDeepfakeDetector
+gradcam_detector = GradCAMDeepfakeDetector()
+
 @app.post("/analyze")
 async def analyze_video(
     file: UploadFile = File(...),
@@ -134,6 +140,30 @@ async def analyze_video(
                 "visual_evidence": result.get("evidence", []),
                 "audio_evidence": ["N/A (Local Mode)"],
                 "fact_check_analysis": "Local Analysis Only. No external context."
+            }
+
+        # --- BRANCH 3: GRAD-CAM ENGINE ---
+        if mode == "gradcam":
+            print("[INFO] routing to GRAD-CAM ENGINE...")
+            # Force .mp4 extension for browser compatibility
+            base_name = os.path.splitext(file.filename)[0]
+            video_output_name = f"heatmap_{base_name}.mp4"
+            # Ensure unique name to avoid overwrite/caching issues if needed, but filename is simple
+            # timestamping might be better but let's stick to simple first
+            video_output_path = os.path.join("generated", video_output_name)
+            
+            # Process
+            score, out_path, is_demo_mode = gradcam_detector.process_video(temp_filename, video_output_path)
+            
+            # Formulate response
+            return {
+                "confidence_score": int(score),
+                "verdict_title": "DEEPFAKE DETECTED" if score > 50 else "LIKELY AUTHENTIC",
+                "visual_evidence": [f"Grad-CAM Heatmap generated."],
+                "audio_evidence": ["N/A"],
+                "fact_check_analysis": "Explainable AI Analysis Complete.",
+                "video_url": f"http://localhost:8000/generated/{video_output_name}",
+                "is_demo_mode": is_demo_mode
             }
 
         # --- BRANCH 2: CLOUD ENGINE (Gemini) ---

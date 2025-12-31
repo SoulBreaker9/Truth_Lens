@@ -114,7 +114,7 @@ export default function Home() {
           className="z-10 w-full max-w-2xl"
         >
           {/* ENGINE SWITCH - REDESIGNED */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <button
               onClick={() => setMode('cloud')}
               className={`relative overflow-hidden group p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${mode === 'cloud'
@@ -141,6 +141,20 @@ export default function Home() {
                 <div className="text-xs font-mono text-gray-500 mt-1">LOCAL INFERENCE // PIXEL-SCAN</div>
               </div>
               {mode === 'local' && <div className="absolute inset-0 bg-purple-500/5 pointer-events-none animate-pulse"></div>}
+            </button>
+
+            <button
+              onClick={() => setMode('gradcam')}
+              className={`relative overflow-hidden group p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${mode === 'gradcam'
+                ? 'bg-amber-950/40 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]'
+                : 'bg-black/40 border-white/10 hover:border-white/30 hover:bg-white/5'}`}
+            >
+              <Eye className={`w-8 h-8 ${mode === 'gradcam' ? 'text-amber-400' : 'text-gray-500'}`} />
+              <div className="text-center">
+                <div className={`font-black font-mono tracking-widest text-lg ${mode === 'gradcam' ? 'text-amber-400' : 'text-gray-400'}`}>GRAD-CAM</div>
+                <div className="text-xs font-mono text-gray-500 mt-1">EXPLAINABLE AI // HEATMAP</div>
+              </div>
+              {mode === 'gradcam' && <div className="absolute inset-0 bg-amber-500/5 pointer-events-none animate-pulse"></div>}
             </button>
           </div>
           <div className="glass-panel rounded-2xl p-10 text-center border border-white/10 hover:border-green-500/50 transition-all duration-500 group relative overflow-hidden">
@@ -177,7 +191,7 @@ export default function Home() {
               whileTap={{ scale: 0.98 }}
               className="mt-6 w-full py-4 bg-green-600 hover:bg-green-500 text-black font-bold text-xl tracking-widest uppercase rounded clip-path-polygon hover:shadow-[0_0_20px_rgba(0,255,65,0.6)] transition-all"
             >
-              {mode === 'local' ? 'EXECUTE NEURAL SCAN' : 'START FORENSIC ANALYSIS'}
+              {mode === 'gradcam' ? 'GENERATE HEATMAP' : mode === 'local' ? 'EXECUTE NEURAL SCAN' : 'START FORENSIC ANALYSIS'}
             </motion.button>
           )}
         </motion.div>
@@ -232,6 +246,52 @@ export default function Home() {
           >
             <span className="group-hover:-translate-x-1 transition-transform">&larr;</span> START NEW INVESTIGATION
           </button>
+
+          {/* GRAD-CAM VIDEO PLAYER */}
+          {result.video_url && (
+            <div className="mb-8 rounded-xl overflow-hidden border-2 border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] bg-black relative">
+              {result.is_demo_mode && (
+                <div className="bg-red-600 text-white font-bold text-center py-2 text-xs animate-pulse tracking-widest uppercase">
+                  ⚠️ DEMO MODE: USING STANDARD RESNET WEIGHTS (RANDOM CLASSIFICATION)
+                </div>
+              )}
+              <div className="bg-amber-950/30 p-3 text-center text-amber-500 font-mono text-xs tracking-[0.2em] border-b border-amber-500/30">
+                    // EXPLAINABLE AI VISUALIZATION: ACTIVATION HEATMAP
+              </div>
+              <div className="relative aspect-video bg-black flex items-center justify-center">
+                <video src={result.video_url} controls autoPlay loop className="max-h-[500px] w-auto mx-auto" />
+              </div>
+
+
+              <div style={{ width: '100%', maxWidth: '800px', margin: '20px auto', fontFamily: 'sans-serif' }}>
+                <h3 style={{ color: '#fff', marginBottom: '10px', fontWeight: 'normal', fontSize: '14px', letterSpacing: '1px' }}>
+                  VISUAL DECODER // SPECTRUM
+                </h3>
+
+                <div style={{
+                  width: '100%',
+                  height: '16px',
+                  background: 'linear-gradient(90deg, #0000FF 0%, #00FFFF 25%, #FFFF00 50%, #FF0000 100%)',
+                  borderRadius: '8px',
+                  boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+                  border: '1px solid #333'
+                }}></div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginTop: '8px',
+                  color: '#aaa',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}>
+                  <span>SAFE AREA</span>
+                  <span>UNCERTAIN</span>
+                  <span style={{ color: '#ff4444' }}>MANIPULATED</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* VERDICT BANNER */}
           <div className={`relative overflow-hidden rounded-xl border-4 ${themeBorder} ${themeBg} p-6 md:p-10 mb-8 backdrop-blur-xl shadow-[0_0_50px_rgba(0,0,0,0.5)]`}>
