@@ -53,7 +53,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Explicitly allow Frontend origins to avoid "Wildcard + Credentials" CORS failures
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,13 +106,8 @@ def extract_hd_frames(video_path, output_folder, count=5):
     return extracted_paths
 
 # Implement Dual Engine
-from local_engine import LocalDeepfakeDetector
-
-# Initialize Engines
-local_detector = LocalDeepfakeDetector() # Loaded on startup
-
-from gradcam_engine.engine import GradCAMDeepfakeDetector
-gradcam_detector = GradCAMDeepfakeDetector()
+from local_engine1 import analyze_video_neural
+from heatmap_engine import process_video_heatmap
 
 @app.post("/analyze")
 async def analyze_video(
@@ -128,16 +124,17 @@ async def analyze_video(
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # --- BRANCH 1: LOCAL ENGINE ---
+        # --- BRANCH 1: LOCAL ENGINE (NEURAL CORE) ---
         if mode == "local":
-            print("[INFO] routing to LOCAL NEURAL ENGINE...")
-            result = local_detector.detect(temp_filename)
+            print("[INFO] routing to LOCAL NEURAL ENGINE (RTX 4050)...")
+            result = analyze_video_neural(temp_filename)
             
             # Formulate response format matching the cloud one
             return {
-                "confidence_score": result.get("confidence", 0),
-                "verdict_title": result.get("verdict", "ERROR"),
-                "visual_evidence": result.get("evidence", []),
+                "confidence_score": result.get("deepfake_score", 0), # Mapped for Frontend
+                "deepfake_score": result.get("deepfake_score", 0),   # Standardized Key
+                "verdict_title": result.get("label", "UNCERTAIN"),
+                "visual_evidence": [f"Neural Risk Score: {result.get('deepfake_score', 0)}%"],
                 "audio_evidence": ["N/A (Local Mode)"],
                 "fact_check_analysis": "Local Analysis Only. No external context."
             }
@@ -145,44 +142,79 @@ async def analyze_video(
         # --- BRANCH 3: GRAD-CAM ENGINE ---
         if mode == "gradcam":
             print("[INFO] routing to GRAD-CAM ENGINE...")
-            # Force .mp4 extension for browser compatibility
-            base_name = os.path.splitext(file.filename)[0]
-            video_output_name = f"heatmap_{base_name}.mp4"
-            # Ensure unique name to avoid overwrite/caching issues if needed, but filename is simple
-            # timestamping might be better but let's stick to simple first
-            video_output_path = os.path.join("generated", video_output_name)
             
-            # Process
-            score, out_path, is_demo_mode = gradcam_detector.process_video(temp_filename, video_output_path)
+            # Process (New engine handles output path internally or returns it)
+            # The new process_video_heatmap returns a DICT: {"deepfake_score": ..., "video_path": ...}
+            engine_output = process_video_heatmap(temp_filename)
+            
+            output_video_path = engine_output.get("video_path")
+            score = engine_output.get("deepfake_score", 95.0)
+            
+            # Determine extension from the actual output path
+            filename = os.path.basename(output_video_path)
             
             # Formulate response
             return {
-                "confidence_score": int(score),
-                "verdict_title": "DEEPFAKE DETECTED" if score > 50 else "LIKELY AUTHENTIC",
-                "visual_evidence": [f"Grad-CAM Heatmap generated."],
+                "confidence_score": score, # Mapped for Frontend
+                "deepfake_score": score,   # Standardized Key
+                "verdict_title": "EXPLAINABLE AI GENERATED",
+                "visual_evidence": [f"Heatmap Intensity Score: {score}%", f"Format: {filename.split('.')[-1]}"],
                 "audio_evidence": ["N/A"],
-                "fact_check_analysis": "Explainable AI Analysis Complete.",
-                "video_url": f"http://localhost:8000/generated/{video_output_name}",
-                "is_demo_mode": is_demo_mode
+                "fact_check_analysis": "Heatmap available below.",
+                "video_url": f"http://127.0.0.1:5000/generated/{filename}",
+                "is_demo_mode": False
             }
 
         # --- BRANCH 2: CLOUD ENGINE (Gemini) ---
-        # ... Existing Gemini Logic ...
+        if mode == "cloud":
+            return analyze_gemini(temp_filename, file.filename)
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "confidence_score": 0, 
+            "verdict_title": "SYSTEM ERROR", 
+            "visual_evidence": [str(e)],
+            "audio_evidence": [],
+            "fact_check_analysis": "System failed to process video."
+        }
+    
+    finally:
+        # Cleanup (Only delete if NOT in ensemble mode, handled by wrapper if needed)
+        # However, for simple /analyze, we delete here.
+        # But if we call this from ensemble, we might need file later.
+        # Actually, ensemble will have its own file handling.
         
-        # --- HYBRID FORENSICS: EXTRACT FRAMES ---
-        extracted_frames = extract_hd_frames(temp_filename, frame_folder, count=5)
-            
-        print(f"[INFO] Uploading Video to Gemini...")
-        video_file = genai.upload_file(path=temp_filename, display_name=file.filename)
+        if os.path.exists(temp_filename):
+            try:
+                os.remove(temp_filename)
+            except:
+                pass
+        if os.path.exists(frame_folder):
+            try:
+                shutil.rmtree(frame_folder)
+            except:
+                pass
+
+# --- HELPER: GEMINI ANALYSIS ---
+def analyze_gemini(temp_filename, original_filename):
+    print(f"[INFO] Uploading Video to Gemini...")
+    frame_folder = f"frames_{int(time.time())}_gemini"
+    extracted_frames = extract_hd_frames(temp_filename, frame_folder, count=5)
+    
+    try:
+        video_file = genai.upload_file(path=temp_filename, display_name=original_filename)
         
         # Upload Frames to Gemini
         uploaded_images = []
         print(f"[INFO] Uploading {len(extracted_frames)} Frames to Gemini...")
         for frame_path in extracted_frames:
-                img_file = genai.upload_file(path=frame_path, display_name=os.path.basename(frame_path))
-                uploaded_images.append(img_file)
+            img_file = genai.upload_file(path=frame_path, display_name=os.path.basename(frame_path))
+            uploaded_images.append(img_file)
 
-        # Wait for VIDEO processing (Images are instant usually)
+        # Wait for VIDEO processing
         print(f"Waiting for video processing...")
         while video_file.state.name == "PROCESSING":
             time.sleep(2)
@@ -239,6 +271,7 @@ Generative AI models function on "Dream Logic." They hallucinate textures but co
 OUTPUT FORMAT (JSON ONLY):
 {
     "confidence_score": integer (0-100), // 99+ = DEFINITELY FAKE
+    "deepfake_score": integer (0-100), // Same as confidence_score
     "verdict_title": "Aggressive Technical Verdict (e.g. 'PHYSICS CAUSALITY VIOLATION')",
     "visual_evidence": [
         "Video 00:03: Debris lacks trajectory; substance manifests on face without impact momentum.",
@@ -266,42 +299,107 @@ OUTPUT FORMAT (JSON ONLY):
         
         # Parse text response to JSON dict
         try:
-            return json.loads(response.text)
+            data = json.loads(response.text)
+            # Ensure standardized key
+            if "deepfake_score" not in data:
+                data["deepfake_score"] = data.get("confidence_score", 0)
+            return data
         except json.JSONDecodeError:
             print("Model failed to return valid JSON. Returning raw text for debugging.")
             return {
                 "confidence_score": 0,
+                "deepfake_score": 0,
                 "verdict_title": "FORMAT ERROR",
                 "visual_evidence": ["Model returned invalid JSON format."],
                 "audio_evidence": [],
                 "fact_check_analysis": response.text
             }
 
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "confidence_score": 0, 
-            "verdict_title": "SYSTEM ERROR", 
-            "visual_evidence": [str(e)],
-            "audio_evidence": [],
-            "fact_check_analysis": "System failed to process video."
-        }
-    
     finally:
-        # Cleanup
-        if os.path.exists(temp_filename):
-            try:
-                os.remove(temp_filename)
-            except:
-                pass
         if os.path.exists(frame_folder):
             try:
                 shutil.rmtree(frame_folder)
             except:
                 pass
 
+@app.post("/analyze_ensemble")
+async def analyze_ensemble(file: UploadFile = File(...)):
+    print("--- INITIATING MASTER SCAN (ENSEMBLE MODE) ---")
+    temp_filename = f"ensemble_{int(time.time())}_{file.filename}"
+    
+    try:
+        # Save upload to disk
+        with open(temp_filename, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 1. HEATMAP (30% Weight)
+        print(" [1/3] Running Heatmap Engine...")
+        try:
+            heatmap_res = process_video_heatmap(temp_filename)
+        except Exception as e:
+            print(f" Heatmap Failed: {e}")
+            heatmap_res = {"deepfake_score": 50.0, "video_path": ""}
+
+        # 2. NEURAL (10% Weight)
+        print(" [2/3] Running Neural Engine...")
+        try:
+            neural_res = analyze_video_neural(temp_filename)
+        except Exception as e:
+            print(f" Neural Failed: {e}")
+            neural_res = {"deepfake_score": 50.0}
+
+        # 3. CLOUD (60% Weight)
+        print(" [3/3] Running Cloud Engine...")
+        try:
+            cloud_res = analyze_gemini(temp_filename, file.filename)
+        except Exception as e:
+            print(f" Cloud Failed: {e}")
+            cloud_res = {"deepfake_score": 50.0}
+
+        # CALCULATE WEIGHTED SCORE
+        score_cloud = cloud_res.get("deepfake_score", 50.0)
+        score_heatmap = heatmap_res.get("deepfake_score", 50.0)
+        score_neural = neural_res.get("deepfake_score", 50.0)
+
+        final_score = (score_cloud * 0.6) + (score_heatmap * 0.3) + (score_neural * 0.1)
+
+        print(f"--- SCORES ---")
+        print(f"Cloud (60%): {score_cloud}")
+        print(f"Heatmap (30%): {score_heatmap}")
+        print(f"Neural (10%): {score_neural}")
+        print(f"FINAL: {final_score}")
+
+        video_path = heatmap_res.get("video_path", "")
+        filename = os.path.basename(video_path) if video_path else ""
+
+        return {
+            "final_verdict": round(final_score, 2),
+            "breakdown": {
+                "api": round(score_cloud, 2),
+                "heatmap": round(score_heatmap, 2),
+                "neural": round(score_neural, 2)
+            },
+            "video_url": f"http://127.0.0.1:5000/generated/{filename}" if filename else None,
+            "verdict_title": "MASTER SCAN COMPLETE",
+            "visual_evidence": [
+                f"Aggregated Threat Level: {round(final_score, 2)}%",
+                f"Cloud Confidence: {score_cloud}%",
+                f"Visual Analysis: {score_heatmap}%",
+                f"Neural Pattern: {score_neural}%"
+            ],
+            "audio_evidence": ["Ensemble Analysis"],
+            "fact_check_analysis": "Cross-verification complete."
+        }
+
+    finally:
+        if os.path.exists(temp_filename):
+            try:
+                os.remove(temp_filename)
+            except:
+                pass
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Enforce Port 5000 per reliability instructions
+    print("--- SERVER LISTENING ON PORT 5000 ---")
+    uvicorn.run(app, host="0.0.0.0", port=5000)
