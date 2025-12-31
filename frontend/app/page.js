@@ -53,6 +53,7 @@ export default function Home() {
     setProgress(0);
     const stopBoot = runBootSequence();
 
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
     const formData = new FormData();
     formData.append("file", file);
     formData.append("mode", mode);
@@ -60,8 +61,8 @@ export default function Home() {
     try {
       // DYNAMIC ENDPOINT SELECTION
       const endpoint = mode === 'master'
-        ? "http://127.0.0.1:5000/analyze_ensemble"
-        : "http://127.0.0.1:5000/analyze";
+        ? `${API_BASE}/analyze_ensemble`
+        : `${API_BASE}/analyze`;
 
       const response = await fetch(endpoint, {
         method: "POST",
