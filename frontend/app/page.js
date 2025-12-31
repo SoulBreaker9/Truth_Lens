@@ -66,6 +66,9 @@ export default function Home() {
 
       const response = await fetch(endpoint, {
         method: "POST",
+        headers: {
+          "ngrok-skip-browser-warning": "69420",
+        },
         body: formData,
       });
 
